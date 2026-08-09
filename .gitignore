@@ -15,6 +15,7 @@ Desktop.ini
 *.sr.lock
 *.aprx.bak*
 *_tmp_save.aprx
+*.aprx.corrupt_backup
 
 # ArcGIS runtime / regenerable noise
 Index/
