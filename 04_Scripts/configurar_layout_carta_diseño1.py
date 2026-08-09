@@ -12,12 +12,12 @@ import arcpy
 # ---------------------------------------------------------------------------
 ROOT = r"C:\PROYECTO_GIS_VF_Antigraviti"
 APRX_PATH = os.path.join(ROOT, "Venecia_Fredonia_Analisis_Estructural.aprx")
-PDF_PATH = os.path.join(ROOT, "05_Salidas", "Mapa_Estructural_VF_Carta.pdf")
+PDF_PATH = os.path.join(ROOT, "05_Salidas", "Diseño1.pdf")
 
 SCALE = 60000.0
 INSET_SCALE = 400000.0
-MAP_CENTER_X = 4697287.0
-MAP_CENTER_Y = 2213314.0
+MAP_CENTER_X = 4698124.0  # centro X del Sinclinal de Venecia
+MAP_CENTER_Y = 2217500.0  # un poco al norte para incluir el eje del sinclinal
 
 # Letter landscape (pulgadas) — composición tipo ejemplo
 PAGE_W = 11.0
@@ -26,13 +26,20 @@ MARGIN = 0.30
 RIGHT_COL_W = 2.70  # inset + leyenda
 
 
-FALLAS_CINEMATICA = [
-    ("cauca-almaguer", "Rumbo Dextral / Transpresiva"),
-    ("mistrat", "Rumbo Dextral"),
-    ("cascajosa", "Normal / Transcurrente local"),
-    ("san jer", "Inversa / Rumbo Dextral"),
-    ("piede", "Inversa / Cabalgamiento"),
+# key GDB, etiqueta leyenda (nombre), RGB, grosor pt — solo estas en leyenda, negras
+FALLAS_LEYENDA = [
+    ("arma", "Falla de Arma", (0, 0, 0), 2.2),
+    ("piede", "Falla de Piedecuesta", (0, 0, 0), 2.2),
+    ("san jer", "Falla de San Jerónimo", (0, 0, 0), 2.2),
+    ("cascajosa", "Falla de La Cascajosa", (0, 0, 0), 2.2),
+    ("mistrat", "Falla de Mistrató", (0, 0, 0), 2.2),
+    ("san juan", "Falla de San Juan", (0, 0, 0), 2.2),
 ]
+OTRAS_FALLAS_COLOR = (0, 0, 0)
+
+# Sinclinal de Venecia — rosa claro
+SINCLINAL_COLOR = (255, 182, 193)  # light pink
+SINCLINAL_WIDTH = 4.0
 
 SCALE_TEXT = "Escala 1:60000"
 
@@ -358,15 +365,14 @@ def update_lineamientos(lyr):
 
 
 def update_fallas(lyr):
-    """Leyenda por tipo cinemático dominante (no por nombre de falla)."""
+    """Fallas por nombre (leyenda con nombres) y color en mapa + diseño."""
     gdb = os.path.join(
         ROOT,
         "Venecia_Fredonia_Analisis_Estructural",
         "Venecia_Fredonia_Analisis_Estructural.gdb",
         "Fallas_Locales",
     )
-    # Resolver NombreFalla exacto en GDB por clave
-    found = {}  # key -> exact name
+    found = {}
     if arcpy.Exists(gdb):
         with arcpy.da.SearchCursor(gdb, ["NombreFalla"]) as cur:
             for (n,) in cur:
@@ -374,7 +380,7 @@ def update_fallas(lyr):
                     continue
                 name = str(n).strip()
                 nl = name.lower()
-                for wk, _label in FALLAS_CINEMATICA:
+                for wk, _lab, _col, _w in FALLAS_LEYENDA:
                     if wk in nl and wk not in found:
                         found[wk] = name
 
@@ -382,62 +388,69 @@ def update_fallas(lyr):
     renderer = arcpy.cim.CreateCIMObjectFromClassName("CIMUniqueValueRenderer", "V3")
     renderer.fields = ["NombreFalla"]
     renderer.useDefaultSymbol = True
-    renderer.isDefaultSymbolVisible = True
+    # Otras fallas se dibujan en mapa pero no aparecen en la leyenda
+    renderer.isDefaultSymbolVisible = False
     renderer.defaultLabel = "Otras fallas"
-    renderer.defaultSymbol = build_line_symbol([solid_stroke(2.0, (0, 0, 0), None)])
+    renderer.defaultSymbol = build_line_symbol(
+        [solid_stroke(1.8, OTRAS_FALLAS_COLOR, None)]
+    )
 
     group = arcpy.cim.CreateCIMObjectFromClassName("CIMUniqueValueGroup", "V3")
-    group.heading = "Tipo cinemático dominante"
+    group.heading = "Fallas tectónicas"
     classes = []
     labels_ok = []
-    for wk, cinematica in FALLAS_CINEMATICA:
+    for wk, label, color, width in FALLAS_LEYENDA:
         if wk not in found:
             continue
         name = found[wk]
         classes.append(
             make_uv_class(
-                cinematica,
+                label,
                 name,
-                build_line_symbol([solid_stroke(2.0, (0, 0, 0), None)]),
+                build_line_symbol([solid_stroke(width, color, None)]),
             )
         )
-        labels_ok.append(f"{name} -> {cinematica}")
+        labels_ok.append(f"{label} RGB{color}")
     group.classes = classes
     renderer.groups = [group]
     cim.renderer = renderer
     lyr.setDefinition(cim)
     configure_labels(lyr, "$feature.NombreFalla", 11, bold=True, halo_pt=1.5)
-    print(f"  OK Fallas por tipo cinemático ({len(labels_ok)}):")
+    lyr.visible = True
+    print(f"  OK Fallas por nombre ({len(labels_ok)}):")
     for line in labels_ok:
         print(f"    {line}")
 
 
 def update_pliegues(lyr):
-    """Solo Sinclinal de Venecia en leyenda; sin clase default [...] ."""
+    """Sinclinal de Venecia en rosa claro (línea visible en Map y Diseño)."""
     cim = lyr.getDefinition("V3")
     renderer = arcpy.cim.CreateCIMObjectFromClassName("CIMUniqueValueRenderer", "V3")
     renderer.fields = ["NombrePliegue"]
-    # Sin default => no aparece [...] en la leyenda
     renderer.useDefaultSymbol = False
     renderer.isDefaultSymbolVisible = False
     renderer.defaultLabel = ""
-    renderer.defaultSymbol = build_line_symbol([solid_stroke(1.5, (0, 0, 0), None)])
+    renderer.defaultSymbol = build_line_symbol(
+        [solid_stroke(1.5, (180, 180, 180), None)]
+    )
 
     group = arcpy.cim.CreateCIMObjectFromClassName("CIMUniqueValueGroup", "V3")
-    group.heading = "Ejes de pliegues"
-    stroke = solid_stroke(2.5, (0, 0, 0), None)
-    marker = character_marker_along_line(
-        8746, size_pt=8.0, spacing_pt=20.0, offset=4.0, font_family="Segoe UI Symbol"
-    )
-    sym = build_line_symbol([marker, stroke])
+    group.heading = "Pliegues"
+    # Solo trazo sólido rosa claro (sin markers que a veces no se dibujan)
+    stroke = solid_stroke(SINCLINAL_WIDTH, SINCLINAL_COLOR, None)
+    sym = build_line_symbol([stroke])
     group.classes = [
         make_uv_class("Sinclinal de Venecia", "Sinclinal de Venecia", sym)
     ]
     renderer.groups = [group]
     cim.renderer = renderer
     lyr.setDefinition(cim)
-    configure_labels(lyr, "$feature.NombrePliegue", 11, bold=True, halo_pt=1.5)
-    print("  OK Pliegues: Sinclinal de Venecia (sin [...] en leyenda)")
+    configure_labels(lyr, "$feature.NombrePliegue", 12, bold=True, halo_pt=2.0)
+    lyr.visible = True
+    print(
+        f"  OK Sinclinal de Venecia rosa claro RGB{SINCLINAL_COLOR} "
+        f"{SINCLINAL_WIDTH} pt"
+    )
 
 
 def update_volcanes(lyr):
@@ -992,7 +1005,7 @@ def configure_legend(lyt, mf, amap):
     rename = {
         "Lineamientos_VF": "Lineamientos Geológicos",
         "Fallas Locales": "Fallas Tectónicas Regionales",
-        "Pliegues Locales": "Ejes de Pliegues (Sinclinal de Venecia)",
+        "Pliegues Locales": "Pliegues",
         "Volcanes": "Cuerpos Volcánicos",
     }
     try:
@@ -1106,11 +1119,22 @@ def main():
     update_pliegues(find_layer(amap, "Pliegues Locales"))
     update_volcanes(find_layer(amap, "Volcanes"))
 
-    print("\n[2] Escala del marco 1:60.000")
+    print("\n[2] Escala del marco 1:60.000 (centrado en Sinclinal)")
     mfs = lyt.listElements("MAPFRAME_ELEMENT", "Marco de mapa")
     mf = mfs[0] if mfs else None
     if mf:
         mf.camera.scale = SCALE
+        mf.camera.X = MAP_CENTER_X
+        mf.camera.Y = MAP_CENTER_Y
+    # También el mapa activo (pestaña Map)
+    try:
+        cam = amap.defaultCamera
+        cam.scale = SCALE
+        cam.X = MAP_CENTER_X
+        cam.Y = MAP_CENTER_Y
+        amap.defaultCamera = cam
+    except Exception as ex:
+        print(f"  Aviso cámara Map: {ex}")
     for te in lyt.listElements("TEXT_ELEMENT", "Texto"):
         te.text = SCALE_TEXT
 
