@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20260212</CreaDate><CreaTime>10145800</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\pro\Resources\ArcToolbox\toolboxes\Spatial Analyst Tools.tbx\RasterCalculator" Date="20260212" Time="101458">RasterCalculator Con( "Flow_Accum.tif" &gt; 1000, 1) C:\PROYECTO_GIS_VF\02_Rasters\Red_Drenaje_P1000.tif</Process></lineage></DataProperties></Esri></metadata>

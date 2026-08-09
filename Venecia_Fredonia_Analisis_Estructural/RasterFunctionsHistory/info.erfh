@@ -1,0 +1,64 @@
+{
+  "version" : 1,
+  "name" : "Raster Functions History",
+  "historyItems" : [
+    {
+      "id" : "{6AC7CD97-3B94-4E7D-B143-FFEA8D42CD88}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Hillshade",
+      "description" : "Creates a 3D representation of the surface, with the sun's relative position taken into account for shading the image.",
+      "rftPath" : "Hillshade_{6AC7CD97-3B94-4E7D-B143-FFEA8D42CD88}.rft.xml",
+      "startTime" : "639064998000000000",
+      "endTime" : "639064998000000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    },
+    {
+      "id" : "{794256C3-EA47-4A6F-892B-6AF0D04B3A55}",
+      "type" : 1,
+      "status" : 2,
+      "name" : "Shaded Relief",
+      "description" : "Creates a multiband, color coded, 3D representation of the surface, with the sun's relative position taken into account for shading the image.",
+      "rftPath" : "Shaded Relief_{794256C3-EA47-4A6F-892B-6AF0D04B3A55}.rft.xml",
+      "startTime" : "639064984300000000",
+      "endTime" : "639064984300000000",
+      "remoteJobStateInfo" : {
+        "ID" : "_lcljob",
+        "Status" : 5,
+        "ReturnValue" : "",
+        "Messages" : [
+          {
+            "Text" : "Submitted.",
+            "Type" : 0
+          },
+          {
+            "Text" : "Executing...",
+            "Type" : 0
+          },
+          {
+            "Text" : "Succeeded.",
+            "Type" : 0
+          }
+        ]
+      }
+    }
+  ]
+}
