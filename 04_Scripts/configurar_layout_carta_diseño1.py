@@ -619,7 +619,7 @@ def configure_page_and_frames(lyt, amap):
     mf.camera.X = MAP_CENTER_X
     mf.camera.Y = MAP_CENTER_Y
 
-    # Inset regional (fallas de contexto)
+    # Inset: si ya es mapa de ubicacion de Colombia, no resetear a 1:400k estructural
     insets = lyt.listElements("MAPFRAME_ELEMENT", "Marco de mapa 1")
     if insets:
         inset = insets[0]
@@ -627,15 +627,18 @@ def configure_page_and_frames(lyt, amap):
         inset.elementHeight = 3.10
         inset.elementPositionX = PAGE_W - MARGIN - RIGHT_COL_W
         inset.elementPositionY = PAGE_H - MARGIN - inset.elementHeight
-        inset.camera.X = MAP_CENTER_X
-        inset.camera.Y = MAP_CENTER_Y
-        inset.camera.scale = INSET_SCALE
-        # Etiquetas de fallas útiles en el inset
-        try:
-            fallas = find_layer(amap, "Fallas Locales")
-            fallas.showLabels = True
-        except Exception:
-            pass
+        loc_name = inset.map.name if inset.map else ""
+        if loc_name == "Mapa_Ubicacion_Colombia":
+            print("  OK Inset Colombia conservado (no se reasigna)")
+        else:
+            inset.camera.X = MAP_CENTER_X
+            inset.camera.Y = MAP_CENTER_Y
+            inset.camera.scale = INSET_SCALE
+            try:
+                fallas = find_layer(amap, "Fallas Locales")
+                fallas.showLabels = True
+            except Exception:
+                pass
 
     # Norte (esquina superior izquierda del mapa)
     for na in lyt.listElements("MAPSURROUND_ELEMENT", "Flecha de norte"):
@@ -670,7 +673,7 @@ def configure_page_and_frames(lyt, amap):
         except Exception:
             pass
 
-    print("  OK Página Letter 11x8.5, mapa 1:60.000, inset 1:400.000")
+    print("  OK Página Letter 11x8.5, mapa 1:60.000")
     return mf
 
 
@@ -968,10 +971,13 @@ def configure_legend(lyt, mf, amap):
         pass
 
     keep = {
+        "Muestras CVMVF",
+        "Rumbo y buzamiento",
         "Lineamientos_VF",
         "Fallas Locales",
         "Pliegues Locales",
         "Volcanes",
+        "Litología",
     }
     # Asegurar que existan los ítems deseados
     existing = {it.name for it in legend.items}
@@ -989,7 +995,15 @@ def configure_legend(lyt, mf, amap):
             except Exception as ex:
                 print(f"  Aviso removeItem {item.name}: {ex}")
 
-    order = ["Lineamientos_VF", "Fallas Locales", "Pliegues Locales", "Volcanes"]
+    order = [
+        "Muestras CVMVF",
+        "Rumbo y buzamiento",
+        "Lineamientos_VF",
+        "Fallas Locales",
+        "Pliegues Locales",
+        "Volcanes",
+        "Litología",
+    ]
     items_by_name = {it.name: it for it in legend.items}
     for i, name in enumerate(order):
         if i == 0 or name not in items_by_name:
@@ -1109,7 +1123,10 @@ def main():
         raise FileNotFoundError(APRX_PATH)
 
     aprx = arcpy.mp.ArcGISProject(APRX_PATH)
-    amap = aprx.listMaps("Map")[0]
+    maps = aprx.listMaps("Map_Estructural") or aprx.listMaps("Map")
+    if not maps:
+        raise RuntimeError("No se encontró Map_Estructural ni Map")
+    amap = maps[0]
     lyt = find_layout(aprx, "1")
     print(f"Layout: {lyt.name!r}")
 
