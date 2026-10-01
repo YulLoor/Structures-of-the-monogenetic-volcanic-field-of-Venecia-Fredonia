@@ -10,7 +10,7 @@ import arcpy
 # ---------------------------------------------------------------------------
 # Rutas y constantes
 # ---------------------------------------------------------------------------
-ROOT = r"C:\PROYECTO_GIS_VF_Antigraviti"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 APRX_PATH = os.path.join(ROOT, "Venecia_Fredonia_Analisis_Estructural.aprx")
 PDF_PATH = os.path.join(ROOT, "05_Salidas", "Diseño1.pdf")
 
@@ -915,6 +915,14 @@ def configure_scale_elements(lyt):
 
 def configure_legend(lyt, mf, amap):
     """Leyenda abajo-derecha, tipografía legible, sin residuos [...]."""
+    rhr_old = ("Diaclasas y fallas", "Rumbo y buzamiento")
+    for lyr in amap.listLayers():
+        if lyr.name in rhr_old:
+            try:
+                amap.removeLayer(lyr)
+            except Exception:
+                pass
+
     x0 = PAGE_W - MARGIN - RIGHT_COL_W
     # Dejar espacio abajo para la barra de escala reducida
     y0 = MARGIN + 0.55
@@ -972,7 +980,8 @@ def configure_legend(lyt, mf, amap):
 
     keep = {
         "Muestras CVMVF",
-        "Rumbo y buzamiento",
+        "Diaclasas",
+        "Falla",
         "Lineamientos_VF",
         "Fallas Locales",
         "Pliegues Locales",
@@ -997,7 +1006,8 @@ def configure_legend(lyt, mf, amap):
 
     order = [
         "Muestras CVMVF",
-        "Rumbo y buzamiento",
+        "Diaclasas",
+        "Falla",
         "Lineamientos_VF",
         "Fallas Locales",
         "Pliegues Locales",

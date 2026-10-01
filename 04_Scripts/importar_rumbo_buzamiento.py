@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
 Importa 01_Insumos/Datos_Geologia_Estructural_RHR.xlsx como puntos
-(WGS84 X/Y -> EPSG:9377) y los dibuja en Map_Estructural con el
-simbolo T de rumbo-buzamiento (convencion RHR: tic a la derecha del rumbo).
+(WGS84 X/Y -> EPSG:9377) y los dibuja en Map_Estructural en dos
+clases: Diaclasas (T negro) y Falla (T rojo). Convencion RHR:
+tic a la derecha del rumbo.
 
 Ejecutar:
   "C:\\Program Files\\ArcGIS\\Pro\\bin\\Python\\envs\\arcgispro-py3\\python.exe" ^
@@ -18,7 +19,7 @@ import traceback
 
 import arcpy
 
-ROOT = r"C:\PROYECTO_GIS_VF_Antigraviti"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 APRX_PATH = os.path.join(ROOT, "Venecia_Fredonia_Analisis_Estructural.aprx")
 GDB = os.path.join(
     ROOT,
@@ -28,8 +29,13 @@ GDB = os.path.join(
 EXCEL = os.path.join(ROOT, "01_Insumos", "Datos_Geologia_Estructural_RHR.xlsx")
 FC_NAME = "Datos_Estructural_RHR"
 FC_PATH = os.path.join(GDB, FC_NAME)
-LAYER_NAME = "Rumbo y buzamiento"
-SYMBOL_SIZE_PT = 16.0
+LAYER_NAME = "Diaclasas y fallas"
+LAYER_NAME_OLD = "Rumbo y buzamiento"
+CLASS_DIACLASAS = "Diaclasas"
+CLASS_FALLA = "Falla"
+COLOR_DIACLASAS = (0, 0, 0)
+COLOR_FALLA = (220, 0, 0)
+SYMBOL_SIZE_PT = 20.0
 DIP_LABEL_PT = 8.0
 
 
@@ -39,12 +45,13 @@ def rgb(r, g, b, a=100):
     return c
 
 
-def _poly_symbol():
+def _poly_symbol(color=(0, 0, 0)):
+    r, g, b = color
     fill = arcpy.cim.CreateCIMObjectFromClassName("CIMSolidFill", "V3")
-    fill.color = rgb(0, 0, 0, 100)
+    fill.color = rgb(r, g, b, 100)
     fill.enable = True
     stroke = arcpy.cim.CreateCIMObjectFromClassName("CIMSolidStroke", "V3")
-    stroke.color = rgb(0, 0, 0, 100)
+    stroke.color = rgb(r, g, b, 100)
     stroke.width = 0.4
     stroke.enable = True
     poly = arcpy.cim.CreateCIMObjectFromClassName("CIMPolygonSymbol", "V3")
@@ -63,22 +70,22 @@ def _rect(xmin, ymin, xmax, ymax):
     return arcpy.Polygon(arcpy.Array(pts))
 
 
-def _graphic_poly(geom):
+def _graphic_poly(geom, color=(0, 0, 0)):
     graphic = arcpy.cim.CreateCIMObjectFromClassName("CIMMarkerGraphic", "V3")
-    graphic.symbol = _poly_symbol()
+    graphic.symbol = _poly_symbol(color)
     graphic.geometry = geom
     return graphic
 
 
-def strike_dip_t_symbol(size_pt=SYMBOL_SIZE_PT):
+def strike_dip_t_symbol(size_pt=SYMBOL_SIZE_PT, color=(0, 0, 0)):
     """
     T geologico en poligonos (se dibuja de forma fiable): rumbo vertical
     (N-S a rotacion 0) y tic de buzamiento hacia el este (derecha).
     Con rotacion geografica = Rumbo, el tic queda a la derecha (RHR).
     """
     w = 0.11
-    strike = _graphic_poly(_rect(-w, -1.0, w, 1.0))
-    tick = _graphic_poly(_rect(0.0, -w, 0.78, w))
+    strike = _graphic_poly(_rect(-w, -1.0, w, 1.0), color)
+    tick = _graphic_poly(_rect(0.0, -w, 0.78, w), color)
     vm = arcpy.cim.CreateCIMObjectFromClassName("CIMVectorMarker", "V3")
     vm.size = float(size_pt)
     vm.enable = True
@@ -129,11 +136,35 @@ def apply_rotation_variable(renderer, field="Rotacion"):
     renderer.visualVariables = existing + [rot]
 
 
-def set_strike_dip_symbol(lyr):
+def make_uv_value(field_value):
+    uv = arcpy.cim.CreateCIMObjectFromClassName("CIMUniqueValue", "V3")
+    uv.fieldValues = [field_value]
+    return uv
+
+
+def make_uv_class(label, field_value, symbol_ref):
+    cls = arcpy.cim.CreateCIMObjectFromClassName("CIMUniqueValueClass", "V3")
+    cls.label = label
+    cls.description = ""
+    cls.visible = True
+    cls.editable = True
+    cls.symbol = symbol_ref
+    cls.values = [make_uv_value(field_value)]
+    return cls
+
+
+def normalize_tipo(raw):
+    if raw and "falla" in str(raw).strip().lower():
+        return CLASS_FALLA
+    return CLASS_DIACLASAS
+
+
+def set_strike_dip_symbol(lyr, color, label):
+    """SimpleRenderer: el T vectorial se dibuja; Unique Values lo omite."""
     rend = arcpy.cim.CreateCIMObjectFromClassName("CIMSimpleRenderer", "V3")
-    rend.symbol = strike_dip_t_symbol()
-    rend.label = LAYER_NAME
-    rend.description = LAYER_NAME
+    rend.symbol = strike_dip_t_symbol(color=color)
+    rend.label = label
+    rend.description = label
     apply_rotation_variable(rend, "Rotacion")
     cim = lyr.getDefinition("V3")
     cim.renderer = rend
@@ -141,7 +172,7 @@ def set_strike_dip_symbol(lyr):
     cim.maxScale = 0
     lyr.setDefinition(cim)
     lyr.visible = True
-    print(f"  OK Simbolo T rumbo-buzamiento {SYMBOL_SIZE_PT:.0f} pt")
+    print(f"  OK SimpleRenderer {label} T {color} {SYMBOL_SIZE_PT:.0f} pt")
 
 
 def configure_dip_labels(lyr):
@@ -150,7 +181,7 @@ def configure_dip_labels(lyr):
         lc = arcpy.cim.CreateCIMObjectFromClassName("CIMLabelClass", "V3")
         cim.labelClasses = [lc]
     lc = cim.labelClasses[0]
-    lc.visibility = True
+    lc.visibility = False
     lc.name = "Buzamiento"
     lc.expressionEngine = "Python"
     lc.expression = "[Buzamiento]"
@@ -191,8 +222,8 @@ def configure_dip_labels(lyr):
     except Exception as ex:
         print(f"  Aviso Maplex: {ex}")
     lyr.setDefinition(cim)
-    lyr.showLabels = True
-    print(f"  OK Etiquetas [Buzamiento] {DIP_LABEL_PT:.0f} pt")
+    lyr.showLabels = False
+    print("  OK Etiquetas de buzamiento apagadas")
 
 
 def _col(header, *cands):
@@ -271,12 +302,17 @@ def import_excel_to_fc():
                 "est": (str(row[i_est]).strip() if i_est is not None and row[i_est] else None),
                 "elev": elev,
                 "ubi": (str(row[i_ubi]).strip() if i_ubi is not None and row[i_ubi] else None),
-                "tipo": (str(row[i_tipo]).strip() if i_tipo is not None and row[i_tipo] else None),
+                "tipo": normalize_tipo(
+                    row[i_tipo] if i_tipo is not None else None
+                ),
                 "fam": (str(row[i_fam]).strip() if i_fam is not None and row[i_fam] else None),
             }
         )
 
     print(f"  Filas con rumbo-buzamiento: {len(records)}")
+    n_dia = sum(1 for rec in records if rec["tipo"] == CLASS_DIACLASAS)
+    n_fal = sum(1 for rec in records if rec["tipo"] == CLASS_FALLA)
+    print(f"  Clases: {CLASS_DIACLASAS}={n_dia}, {CLASS_FALLA}={n_fal}")
     if not records:
         raise RuntimeError("Ningun registro valido")
 
@@ -368,6 +404,24 @@ def import_excel_to_fc():
     return FC_PATH, n
 
 
+def add_class_layer(amap, fc_path, name, color, tipo_value):
+    lyr = amap.addDataFromPath(fc_path)
+    try:
+        lyr.name = name
+    except Exception:
+        pass
+    try:
+        lyr.definitionQuery = f"Tipo_Estr = '{tipo_value}'"
+    except Exception as ex:
+        print(f"  Aviso definitionQuery {name}: {ex}")
+    lyr.visible = True
+    set_strike_dip_symbol(lyr, color, name)
+    configure_dip_labels(lyr)
+    n = int(arcpy.management.GetCount(lyr)[0])
+    print(f"  OK Capa {name} ({n} features)")
+    return lyr
+
+
 def add_to_map(aprx, fc_path):
     amap = None
     for name in ("Map_Estructural", "Map"):
@@ -378,51 +432,57 @@ def add_to_map(aprx, fc_path):
     if amap is None:
         raise RuntimeError("No se encontro Map_Estructural")
 
+    old_names = {
+        LAYER_NAME,
+        LAYER_NAME_OLD,
+        FC_NAME,
+        CLASS_DIACLASAS,
+        CLASS_FALLA,
+    }
     for lyr in list(amap.listLayers()):
-        if lyr.name == LAYER_NAME or lyr.name == FC_NAME:
+        if lyr.name in old_names:
             try:
                 amap.removeLayer(lyr)
             except Exception:
                 pass
-    lyr = amap.addDataFromPath(fc_path)
-    try:
-        lyr.name = LAYER_NAME
-    except Exception:
-        pass
-    lyr.visible = True
-    set_strike_dip_symbol(lyr)
-    cim_chk = lyr.getDefinition("V3")
-    vv = (cim_chk.renderer.visualVariables or [None])[0]
-    if vv is not None:
-        info = getattr(vv, "visualVariableInfoZ", None)
-        print(
-            "  Rotacion Z:",
-            getattr(vv, "rotationTypeZ", None),
-            getattr(info, "visualVariableInfoType", None),
-            getattr(info, "expression", None),
-        )
-    configure_dip_labels(lyr)
+
+    lyr_dia = add_class_layer(
+        amap, fc_path, CLASS_DIACLASAS, COLOR_DIACLASAS, CLASS_DIACLASAS
+    )
+    lyr_fal = add_class_layer(
+        amap, fc_path, CLASS_FALLA, COLOR_FALLA, CLASS_FALLA
+    )
+    for lyr in (lyr_dia, lyr_fal):
+        cim_chk = lyr.getDefinition("V3")
+        vv = (cim_chk.renderer.visualVariables or [None])[0]
+        if vv is not None:
+            info = getattr(vv, "visualVariableInfoZ", None)
+            print(
+                f"  Rotacion Z {lyr.name}:",
+                getattr(vv, "rotationTypeZ", None),
+                getattr(info, "visualVariableInfoType", None),
+                getattr(info, "expression", None),
+            )
+
     try:
         muestras = None
         for L in amap.listLayers():
             if L.name == "Muestras CVMVF":
                 muestras = L
                 break
-        if muestras is not None:
-            amap.moveLayer(muestras, lyr, "BEFORE")
-        else:
-            top = amap.listLayers()[0]
-            if lyr != top:
-                amap.moveLayer(top, lyr, "BEFORE")
+        ref = muestras if muestras is not None else amap.listLayers()[0]
+        for lyr in (lyr_fal, lyr_dia):
+            if lyr != ref:
+                amap.moveLayer(ref, lyr, "BEFORE")
     except Exception as ex:
         print(f"  Aviso orden capas: {ex}")
-    print(f"  OK Capa {LAYER_NAME} en {amap.name}")
+    print(f"  OK Capas {CLASS_DIACLASAS} y {CLASS_FALLA} en {amap.name}")
     return amap.name
 
 
 def main():
     print("=" * 60)
-    print("Importar rumbo-buzamiento (Datos_Geologia_Estructural_RHR)")
+    print("Importar Diaclasas y fallas (Datos_Geologia_Estructural_RHR)")
     print("=" * 60)
     if not os.path.exists(APRX_PATH):
         raise FileNotFoundError(APRX_PATH)

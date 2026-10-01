@@ -2,10 +2,11 @@
 """
 Leyenda de litologia para Diseno1 y Diseno2:
 
-1. Formacion Combia (andesitas y basalto)
-2. Formacion Amaga (arenitas, arcillolitas y carbones)
-3. Porfidos andesiticos y daciticos
+1. Formacion Combia (andesitas y basaltos) segun SGC 2015
+2. Formacion Amaga (arenitas, arcillolitas y carbones) segun SGC 2015
+3. Porfidos andesiticos y daciticos segun SGC 2015
 4. Muestras CVMVF
+5. Diaclasas y fallas (Unique Values)
 
 No cambia la escala ni el inset. Ejecutar:
   "C:\\Program Files\\ArcGIS\\Pro\\bin\\Python\\envs\\arcgispro-py3\\python.exe" ^
@@ -20,13 +21,15 @@ import traceback
 
 import arcpy
 
-ROOT = r"C:\PROYECTO_GIS_VF_Antigraviti"
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 APRX_PATH = os.path.join(ROOT, "Venecia_Fredonia_Analisis_Estructural.aprx")
 
 CLIP_NAME = "Unidades_Cronoestratigraficas_clip"
 LITO_NAME = "Litología"
 MUESTRAS_NAME = "Muestras CVMVF"
-RHR_NAME = "Rumbo y buzamiento"
+RHR_NAME = "Diaclasas y fallas"
+RHR_NAME_OLD = "Rumbo y buzamiento"
+RHR_LAYERS = ["Diaclasas", "Falla"]
 VOLC_NAME = "Volcanes"
 LINEAM_NAME = "Lineamientos_VF"
 FALLAS_NAME = "Fallas Locales"
@@ -37,7 +40,8 @@ STRUCTURAL_LEGEND = [LINEAM_NAME, FALLAS_NAME, PLIEGUES_NAME, VOLC_NAME]
 # Orden pedido para la leyenda unica de Diseno1
 LEGEND_ORDER = [
     MUESTRAS_NAME,
-    RHR_NAME,
+    "Diaclasas",
+    "Falla",
     LINEAM_NAME,
     FALLAS_NAME,
     PLIEGUES_NAME,
@@ -51,8 +55,8 @@ MUESTRAS_LABEL_PT = 10.0
 MAIN_MF_NAME = "Marco de mapa"
 INSET_MF_NAME = "Marco de mapa 1"
 
-# Capas de simbolo unico: parche y texto en la misma fila
-ONE_ROW_ITEMS = {MUESTRAS_NAME, RHR_NAME}
+# Capas de simbolo unico: parche y texto en la misma fila (sin encabezado)
+ONE_ROW_ITEMS = {MUESTRAS_NAME, "Diaclasas", "Falla"}
 
 # Volcanes usa un renderer simple sin encabezado propio: el nombre de capa
 # hace de encabezado para que no se lea como parte del grupo de pliegues
@@ -68,15 +72,15 @@ RIGHT_COL_W = 2.70
 LITO_CLASSES = [
     (
         "10339",
-        "Formación Combia (andesitas y basalto)",
+        "Formación Combia (andesitas y basaltos) según SGC 2015",
     ),
     (
         "10250",
-        "Formación Amagá (arenitas, arcillolitas y carbones)",
+        "Formación Amagá (arenitas, arcillolitas y carbones) según SGC 2015",
     ),
     (
         "10274",
-        "Pórfidos andesíticos y dacíticos",
+        "Pórfidos andesíticos y dacíticos según SGC 2015",
     ),
 ]
 LITO_CODES = [c[0] for c in LITO_CLASSES]
@@ -359,6 +363,8 @@ def style_legend_frame(legend, order, x, y, w, h, title="Leyenda"):
         pass
 
     keep = set(order)
+    keep.discard(RHR_NAME_OLD)
+    keep.discard(RHR_NAME)
 
     existing = {it.name for it in legend.items}
     amap = None
@@ -368,7 +374,11 @@ def style_legend_frame(legend, order, x, y, w, h, title="Leyenda"):
         amap = None
     for name in order:
         if name not in existing and amap is not None:
-            lyr = find_layer(amap, name)
+            lyr = None
+            for L in amap.listLayers():
+                if L.name == name:
+                    lyr = L
+                    break
             if lyr is not None:
                 try:
                     legend.addItem(lyr)
@@ -406,7 +416,9 @@ def style_legend_frame(legend, order, x, y, w, h, title="Leyenda"):
         except Exception:
             pass
         if hasattr(item, "showHeading"):
-            item.showHeading = not one_row
+            item.showHeading = (n in (LITO_NAME,)) or (
+                n not in ONE_ROW_ITEMS and not one_row
+            )
         if hasattr(item, "showLayerName"):
             item.showLayerName = n in LAYER_NAME_ITEMS
         if hasattr(item, "showLabels"):
@@ -427,7 +439,7 @@ def style_legend_frame(legend, order, x, y, w, h, title="Leyenda"):
             if n == MUESTRAS_NAME:
                 item.patchWidth = 16
                 item.patchHeight = 12
-            elif n == RHR_NAME:
+            elif n in ("Diaclasas", "Falla", RHR_NAME):
                 item.patchWidth = 22
                 item.patchHeight = 16
             else:
@@ -625,10 +637,12 @@ def configure_map(amap, show_structural=False):
         style_muestras_legend_label(mu)
         configure_muestras_labels(mu)
         print(f"  OK {MUESTRAS_NAME} visible")
-    rhr = find_layer(amap, RHR_NAME)
-    if rhr is not None:
-        rhr.visible = True
-        print(f"  OK {RHR_NAME} visible")
+    by_name = {lyr.name: lyr for lyr in amap.listLayers()}
+    for name in RHR_LAYERS:
+        rhr = by_name.get(name)
+        if rhr is not None:
+            rhr.visible = True
+            print(f"  OK {name} visible")
     if show_structural:
         for name in STRUCTURAL_LEGEND + [LITO_NAME]:
             lyr = find_layer(amap, name)
