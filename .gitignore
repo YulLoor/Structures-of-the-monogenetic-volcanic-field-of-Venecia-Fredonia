@@ -29,7 +29,6 @@ Index/
 **/test_*.py
 **/*_test.py
 **/tests/
-05_Salidas/*.pdf
 *.gdb/
 *.gdb/**
 
