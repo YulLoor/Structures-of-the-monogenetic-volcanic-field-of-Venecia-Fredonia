@@ -21,3 +21,23 @@ Desktop.ini
 Index/
 **/GpMessages/
 .backups/
+
+# Local history, test scripts, and generated outputs
+.pyHistory
+**/.pytest_cache/
+**/__pycache__/
+**/test_*.py
+**/*_test.py
+**/tests/
+05_Salidas/*.pdf
+*.gdb/
+*.gdb/**
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*credentials*
+*secrets*
